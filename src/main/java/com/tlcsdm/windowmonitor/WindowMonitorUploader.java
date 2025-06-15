@@ -40,6 +40,7 @@ import java.awt.Robot;
 import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -76,6 +77,7 @@ public class WindowMonitorUploader {
     private static void uploadWechatImage(Sardine sardine) throws Exception {
         BufferedImage screenshot = takeFullScreenshot();
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HHmmss"));
+        String dateCary = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String fileName = "wechat_" + timestamp + ".png";
         // 将截图写入 ByteArrayOutputStream
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -84,7 +86,7 @@ public class WindowMonitorUploader {
         byte[] imageData = baos.toByteArray();
         baos.close();
         // 直接使用 byte[] 上传文件
-        sardine.put(WEBDAV_URL + fileName, imageData);
+        sardine.put(WEBDAV_URL + dateCary + "/" + fileName, imageData);
     }
 
     private static String getActiveWindowTitle() {
