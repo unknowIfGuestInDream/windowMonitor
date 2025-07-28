@@ -19,12 +19,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      #      - name: Setup Java
+      #        uses: actions/setup-java@v4
+      #        with:
+      #          java-version: 17
+      #          distribution: 'zulu'
+      #          cache: maven
+
+      - name: Setup Graal
+        uses: graalvm/setup-graalvm@v1
         with:
-          java-version: 17
-          distribution: 'zulu'
-          cache: maven
+          distribution: 'graalvm'
+          java-version: '17'
+          cache: 'native-image'
 
       - name: Run JReleaser
         uses: jreleaser/release-action@v2
