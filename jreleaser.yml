@@ -8,7 +8,6 @@ release:
     tagName: v{{projectVersion}}
     releaseName: v{{projectVersion}}
     draft: false
-    prerelease: false
     issues:
       enabled: true
     changelog:
@@ -16,8 +15,6 @@ release:
       preset: conventional-commits
       contributors:
         format: '- {{contributorName}}{{#contributorUsernameAsLink}} ({{.}}){{/contributorUsernameAsLink}}'
-      extraProperties:
-        categorizeScopes: true
       labelers:
         - label: 'i18n'
           title: 'regex:^(?:i18n(?:\(.*\))?!?):\s.*'
@@ -59,7 +56,6 @@ release:
         - search: 'i18n: '
         - search: 'deps: '
 
-
 project:
   name: windowMonitor
   version: 1.0.0
@@ -69,42 +65,13 @@ project:
   authors:
     - unknowIfGuestInDream
   license: MIT
-  inceptionYear: 2025
+  inceptionYear: "2025"
   stereotype: CLI
   vendor: Tlcsdm
   languages:
     java:
       groupId: com.tlcsdm.windowmonitor
       mainClass: com.tlcsdm.windowmonitor.WindowMonitorUploader
-
-packagers:
-  target-architecture:
-    - all
-  archive:
-    active: ALWAYS
-  copyright:
-    - license: MIT
-      paths:
-        - "*"
-java:
-  version: 17
-  mainClass: com.tlcsdm.windowmonitor.WindowMonitorUploader
-
-checksum:
-  algorithm:
-    - SHA_256
-jlink:
-  active: ALWAYS
-  imageName: windowMonitor-image
-  launcher:
-    name: windowMonitor
-  mainJar:
-    path: target/windowMonitor-1.0.0.jar
-  options:
-    - "--strip-debug"
-    - "--compress=2"
-    - "--no-header-files"
-    - "--no-man-pages"
 
 assemble:
   nativeImage:
