@@ -23,10 +23,8 @@ jobs:
 
       - name: Setup JReleaser CLI
         run: |
-          curl -sL https://github.com/jreleaser/jreleaser/releases/latest/download/jreleaser-cli-linux-amd64.tar.gz -o jreleaser.tar.gz
-          tar -xzf jreleaser.tar.gz
-          sudo mv jreleaser-cli/bin/jreleaser /usr/local/bin/jreleaser
-          sudo chmod +x /usr/local/bin/jreleaser
+          curl -sL https://github.com/jreleaser/jreleaser/releases/latest/download/jreleaser-cli-linux-amd64.tar.gz | tar xz -C /usr/local/bin --strip-components=1 jreleaser-cli/bin/jreleaser
+          chmod +x /usr/local/bin/jreleaser
 
       - name: Run JReleaser Full Release
         env:
