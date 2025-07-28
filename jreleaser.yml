@@ -3,7 +3,7 @@ release:
     owner: unknowIfGuestInDream
     name: windowMonitor
     overwrite: true
-    sign: true
+    sign: false
     discussionCategoryName: Announcements
     tagName: v{{projectVersion}}
     releaseName: v{{projectVersion}}
