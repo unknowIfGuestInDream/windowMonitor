@@ -1,10 +1,14 @@
 release:
   github:
     owner: unknowIfGuestInDream
-    repo: windowMonitor
+    name: windowMonitor
     overwrite: true
     sign: true
     discussionCategoryName: Announcements
+    tagName: v{{projectVersion}}
+    releaseName: v{{projectVersion}}
+    draft: false
+    prerelease: false
     issues:
       enabled: true
     changelog:
