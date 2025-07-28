@@ -1,0 +1,36 @@
+name: Release Native Image
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'graalvm'
+          java-version: '17'
+          cache: 'native-image'
+
+      - name: Install native-image tool
+        run: gu install native-image
+
+      - name: Set up JReleaser
+        uses: jreleaser/setup-jreleaser@v1
+        with:
+          version: latest
+
+      - name: Build with Maven
+        run: mvn -B clean package
+
+      - name: Run JReleaser Full Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: jreleaser full-release

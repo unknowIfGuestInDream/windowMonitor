@@ -1,0 +1,48 @@
+release:
+  github:
+    owner: unknowIfGuestInDream
+    repo: windowMonitor
+    token: '${env.GITHUB_TOKEN}'
+    announce: true
+    changelog:
+      enabled: true
+
+project:
+  name: windowMonitor
+  version: 1.0.0
+  description: My Java app with jlink image
+packagers:
+  archive:
+    active: ALWAYS
+java:
+  version: 17
+  mainClass: com.tlcsdm.windowmonitor.WindowMonitorUploader
+checksum:
+  algorithm:
+    - SHA_256
+jlink:
+  active: ALWAYS
+  imageName: windowMonitor-image
+  launcher:
+    name: windowMonitor
+  mainJar:
+    path: target/windowMonitor-1.0.0.jar
+  options:
+    - "--strip-debug"
+    - "--compress=2"
+    - "--no-header-files"
+    - "--no-man-pages"
+
+assemble:
+  nativeImage:
+    windowMonitor:
+      active: ALWAYS
+      imageName: windowMonitor
+      executable: windowMonitor
+      mainJar:
+        path: target/windowMonitor-1.0.0.jar
+      graal:
+        javaVersion: 17
+        options:
+          - "--no-fallback"
+
