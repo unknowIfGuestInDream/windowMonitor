@@ -81,7 +81,3 @@ assemble:
       executable: windowMonitor
       mainJar:
         path: target/windowMonitor-1.0.0.jar
-      graal:
-        javaVersion: 17
-        options:
-          - "--no-fallback"
