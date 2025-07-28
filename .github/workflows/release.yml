@@ -12,15 +12,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup GraalVM
-        uses: actions/setup-java@v4
+      - name: Setup Graal
+        uses: graalvm/setup-graalvm@v1
         with:
-          distribution: 'graalvm'
           java-version: '17'
-          cache: 'native-image'
-
-      - name: Install native-image tool
-        run: gu install native-image
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          distribution: 'graalvm-community'
+          components: 'native-image'
+          cache: maven
 
       - name: Setup JReleaser CLI
         run: |

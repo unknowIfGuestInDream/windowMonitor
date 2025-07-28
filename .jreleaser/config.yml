@@ -2,21 +2,90 @@ release:
   github:
     owner: unknowIfGuestInDream
     repo: windowMonitor
-    token: '${env.GITHUB_TOKEN}'
-    announce: true
-    changelog:
+    overwrite: true
+    sign: true
+    discussionCategoryName: Announcements
+    issues:
       enabled: true
+    changelog:
+      formatted: ALWAYS
+      preset: conventional-commits
+      contributors:
+        format: '- {{contributorName}}{{#contributorUsernameAsLink}} ({{.}}){{/contributorUsernameAsLink}}'
+      extraProperties:
+        categorizeScopes: true
+      labelers:
+        - label: 'i18n'
+          title: 'regex:^(?:i18n(?:\(.*\))?!?):\s.*'
+          order: 120
+        - label: 'dependencies'
+          title: 'regex:^(?:deps(?:\(.*\))?!?):\s.*'
+          order: 130
+        - label: 'allcontributors1'
+          title: 'regex:^docs: update .all-contributorsrc.*'
+          order: -1
+        - label: 'allcontributors2'
+          title: 'regex:^docs: update CONTRIBUTORS.md.*'
+          order: -2
+      categories:
+        - title: '🌐 Translation'
+          key: 'i18n'
+          order: 70
+          labels:
+            - 'i18n'
+        - title: '⚙️  Dependencies'
+          key: 'dependencies'
+          order: 80
+          labels:
+            - 'dependencies'
+        - title: 'allcontributors'
+          order: 59
+          labels:
+            - 'allcontributors1'
+            - 'allcontributors2'
+      hide:
+        categories:
+          - 'merge'
+          - 'allcontributors'
+        contributors:
+          - 'GitHub'
+          - 'allcontributors'
+          - 'dependabot'
+      replacers:
+        - search: 'i18n: '
+        - search: 'deps: '
+
 
 project:
   name: windowMonitor
   version: 1.0.0
-  description: My Java app with jlink image
+  description: Window Monitor for wechat
+  links:
+    homepage: https://github.com/unknowIfGuestInDream/windowMonitor
+  authors:
+    - unknowIfGuestInDream
+  license: MIT
+  inceptionYear: 2025
+  stereotype: CLI
+  vendor: Tlcsdm
+  languages:
+    java:
+      groupId: com.tlcsdm.windowmonitor
+      mainClass: com.tlcsdm.windowmonitor.WindowMonitorUploader
+
 packagers:
+  target-architecture:
+    - all
   archive:
     active: ALWAYS
+  copyright:
+    - license: MIT
+      paths:
+        - "*"
 java:
   version: 17
   mainClass: com.tlcsdm.windowmonitor.WindowMonitorUploader
+
 checksum:
   algorithm:
     - SHA_256
@@ -45,4 +114,3 @@ assemble:
         javaVersion: 17
         options:
           - "--no-fallback"
-
