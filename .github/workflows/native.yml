@@ -1,0 +1,47 @@
+name: Release Native Image
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: 'graalvm'
+          java-version: '17'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Show environment
+        run: |
+          echo "OS: ${{ matrix.os }}"
+          echo "GRAALVM_HOME: $GRAALVM_HOME"
+          echo "JAVA_HOME: $JAVA_HOME"
+          java --version
+          native-image --version
+      - name: Using Maven plugin
+        run: mvn -Pnative package -DskipTests
+
+      - name: List target folder
+        run: ls -al target
+        shell: bash  # 强制统一输出格式
+
+      - name: Upload native image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-image-${{ matrix.os }}
+          path: |
+            target/*.exe
+            target/*.bin
+            target/*.app
+            target/*
