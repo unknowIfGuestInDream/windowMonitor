@@ -1,44 +1,32 @@
-name: release
+name: Release Native Image
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-
 jobs:
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-
+  build:
+    runs-on: windows-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup GraalVM
+        uses: graalvm/setup-graalvm@v1
         with:
-          fetch-depth: 0
+          distribution: 'graalvm'
+          java-version: '17'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v4
         with:
-          java-version: 17
-          distribution: 'zulu'
-          cache: maven
+          maven-version: '3.9.9'
 
-      - name: Build with Maven
-        run: mvn -B clean package --file pom.xml -DskipTests
+      - name: Build and Package
+        run: mvn -B clean package
 
-      - name: Run JReleaser
-        uses: jreleaser/release-action@v2
-        env:
-          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: JReleaser release output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jreleaser-release
-          path: |
-            out/jreleaser/trace.log
-            out/jreleaser/output.properties
+      - name: Build native image with JReleaser
+        run: jreleaser assemble
