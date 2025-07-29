@@ -30,3 +30,10 @@ jobs:
 
       - name: Build native image with JReleaser
         run: jreleaser assemble
+
+      - name: Upload native image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-image-windows
+          path: |
+            out/jreleaser/assemble/**/**/windowMonitor.exe
