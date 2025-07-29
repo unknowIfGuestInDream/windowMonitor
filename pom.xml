@@ -255,6 +255,9 @@
                             <execution>
                                 <id>build-native</id>
                                 <phase>package</phase>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
                             </execution>
                         </executions>
                     </plugin>
