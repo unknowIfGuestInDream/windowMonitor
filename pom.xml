@@ -248,6 +248,15 @@
                                 <buildArg>--verbose</buildArg>
                             </buildArgs>
                         </configuration>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>compile</goal>
+                                </goals>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
