@@ -42,7 +42,4 @@ jobs:
         with:
           name: native-image-${{ matrix.os }}
           path: |
-            target/*.exe
-            target/*.bin
-            target/*.app
-            target/*
+            *
