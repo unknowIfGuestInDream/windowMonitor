@@ -246,6 +246,7 @@
                         <configuration>
                             <imageName>${project.artifactId}</imageName>
                             <mainClass>com.tlcsdm.windowmonitor.WindowMonitorUploader</mainClass>
+                            <outputDirectory>${project.build.directory}/native</outputDirectory>
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--verbose</buildArg>
