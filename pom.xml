@@ -203,6 +203,9 @@
                         <goals>
                             <goal>jar-no-fork</goal>
                         </goals>
+                        <configuration>
+                            <classifier>sources</classifier>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -252,9 +255,6 @@
                             <execution>
                                 <id>build-native</id>
                                 <phase>package</phase>
-                                <goals>
-                                    <goal>compile</goal>
-                                </goals>
                             </execution>
                         </executions>
                     </plugin>
