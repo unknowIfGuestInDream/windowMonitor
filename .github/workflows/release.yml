@@ -72,6 +72,29 @@ jobs:
           Write-Host "Created dist/windowMonitor-windows-$env:APP_VERSION.zip"
           Remove-Item -Path 'staging' -Recurse -Force
 
+      - name: Prepare service installer for jpackage
+        shell: pwsh
+        run: |
+          $resourceDir = 'jpackage-resources'
+          New-Item -ItemType Directory -Path $resourceDir -Force | Out-Null
+
+          $nssmUrl = 'https://nssm.cc/release/nssm-2.24.zip'
+          $expectedHash = '727D1E42275C605E0F04ABA98095C38A8E1E46DEF453CDFFCE42869428AA6743'
+          Invoke-WebRequest -Uri $nssmUrl -OutFile nssm.zip -UseBasicParsing
+          $actualHash = (Get-FileHash -Path nssm.zip -Algorithm SHA256).Hash
+          if ($actualHash -ne $expectedHash) {
+            throw "NSSM checksum mismatch: expected $expectedHash, got $actualHash"
+          }
+
+          Expand-Archive -Path nssm.zip -DestinationPath nssm-extract -Force
+          $nssmExe = 'nssm-extract\nssm-2.24\win64\nssm.exe'
+          if (-not (Test-Path $nssmExe)) {
+            throw "nssm.exe not found at expected path: $nssmExe"
+          }
+          Copy-Item -Path $nssmExe -Destination "$resourceDir\service-installer.exe"
+          Remove-Item -Path nssm.zip, nssm-extract -Recurse -Force
+          Write-Host "Prepared service-installer.exe in $resourceDir"
+
       - name: Create Windows Service installer (jpackage)
         shell: pwsh
         run: |
@@ -86,6 +109,7 @@ jobs:
             --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader `
             --type msi `
             --launcher-as-service `
+            --resource-dir jpackage-resources `
             --win-dir-chooser `
             --win-menu `
             --win-menu-group "windowMonitor" `
@@ -104,6 +128,7 @@ jobs:
           }
 
           Remove-Item -Path $jpackageInput -Recurse -Force
+          Remove-Item -Path jpackage-resources -Recurse -Force
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
