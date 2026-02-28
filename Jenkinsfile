@@ -114,7 +114,7 @@ pipeline {
                     archiveArtifacts 'windowMonitor*service*.msi'
                 }
                 failure {
-                    echo 'Build windowMonitor-windows-service failed - requires Windows agent with JDK 14+'
+                    echo 'Build windowMonitor-windows-service failed - requires Windows agent with JDK 16+'
                 }
                 aborted {
                     echo 'Build aborted'
@@ -249,6 +249,6 @@ def packageServiceApp() {
             --description "windowMonitor Windows Service" ^
             --dest .
     """
-    bat "ren windowMonitor-*.msi windowMonitor-service_${version}_b${BUILD_NUMBER}.msi"
+    bat "ren windowMonitor-${version}.msi windowMonitor-service_${version}_b${BUILD_NUMBER}.msi"
     bat "if exist jpackage-input rmdir /s /q jpackage-input"
 }
