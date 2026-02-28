@@ -140,9 +140,16 @@ jobs:
           Remove-Item -Path $jpackageInput -Recurse -Force
           Remove-Item -Path jpackage-resources -Recurse -Force
 
-      - name: Upload packaged artifact
+      - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: windowMonitor-windows
-          path: dist/*
+          path: dist/windowMonitor-windows-${{ env.APP_VERSION }}.zip
+          retention-days: 7
+
+      - name: Upload service installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windowMonitor-windows-service
+          path: dist/windowMonitor-windows-service-${{ env.APP_VERSION }}.msi
           retention-days: 7
