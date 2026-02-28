@@ -78,13 +78,32 @@ jobs:
           $resourceDir = 'jpackage-resources'
           New-Item -ItemType Directory -Path $resourceDir -Force | Out-Null
 
-          $nssmUrl = 'https://nssm.cc/release/nssm-2.24.zip'
           $expectedHash = '727D1E42275C605E0F04ABA98095C38A8E1E46DEF453CDFFCE42869428AA6743'
-          Invoke-WebRequest -Uri $nssmUrl -OutFile nssm.zip -UseBasicParsing
-          $actualHash = (Get-FileHash -Path nssm.zip -Algorithm SHA256).Hash
-          if ($actualHash -ne $expectedHash) {
-            throw "NSSM checksum mismatch: expected $expectedHash, got $actualHash"
+          $urls = @(
+            'https://github.com/HandSonic/nssm/releases/download/2.24/nssm-2.24.zip',
+            'https://nssm.cc/release/nssm-2.24.zip'
+          )
+
+          $downloaded = $false
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Downloading NSSM from: $url"
+              Invoke-WebRequest -Uri $url -OutFile nssm.zip -UseBasicParsing
+              $actualHash = (Get-FileHash -Path nssm.zip -Algorithm SHA256).Hash
+              if ($actualHash -ne $expectedHash) {
+                Write-Host "Hash mismatch from $url (expected $expectedHash, got $actualHash)"
+                Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
+                continue
+              }
+              $downloaded = $true
+              Write-Host "Successfully downloaded NSSM from $url"
+              break
+            } catch {
+              Write-Host "Failed to download from ${url}: $_"
+              Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
+            }
           }
+          if (-not $downloaded) { throw 'Failed to download NSSM from all sources' }
 
           Expand-Archive -Path nssm.zip -DestinationPath nssm-extract -Force
           $nssmExe = 'nssm-extract\nssm-2.24\win64\nssm.exe'
