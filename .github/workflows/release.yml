@@ -132,6 +132,8 @@ jobs:
             --win-dir-chooser `
             --win-menu `
             --win-menu-group "windowMonitor" `
+            --win-upgrade-uuid "09b6b7b5-7784-4bf4-a638-1fccd8eeab77" `
+            --license-file LICENSE `
             --app-version $env:APP_VERSION `
             --vendor "Tlcsdm" `
             --description "windowMonitor Windows Service" `
