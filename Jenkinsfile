@@ -99,29 +99,6 @@ pipeline {
             }
         }
 
-        stage('Build windowMonitor-windows-service') {
-            when {
-                expression { !isUnix() }
-            }
-            steps {
-                script {
-                    packageServiceApp()
-                }
-            }
-
-            post {
-                success {
-                    archiveArtifacts 'windowMonitor*service*.msi'
-                }
-                failure {
-                    echo 'Build windowMonitor-windows-service failed - requires Windows agent with JDK 16+'
-                }
-                aborted {
-                    echo 'Build aborted'
-                }
-            }
-        }
-
         stage('Prepare Mac Build') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
@@ -223,32 +200,4 @@ def packageApp(os) {
     sh "cp -r jretemp/jre staging/"
     sh "cd staging && zip -qr ../windowMonitor-${os}_${version}_b${BUILD_NUMBER}_\$(date +%Y%m%d).zip . && cd .."
     sh "rm -rf staging"
-}
-
-def packageServiceApp() {
-    def version = bat(
-        script: "@${M2_HOME}\\bin\\mvn help:evaluate -Dexpression=project.version -q -DforceStdout",
-        returnStdout: true
-    ).trim()
-    def jarName = "windowMonitor-${version}.jar"
-    bat "if not exist jpackage-input mkdir jpackage-input"
-    bat "copy target\\${jarName} jpackage-input\\"
-    bat """
-        jpackage ^
-            --input jpackage-input ^
-            --name windowMonitor ^
-            --main-jar ${jarName} ^
-            --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader ^
-            --type msi ^
-            --launcher-as-service ^
-            --win-dir-chooser ^
-            --win-menu ^
-            --win-menu-group "windowMonitor" ^
-            --app-version ${version} ^
-            --vendor "Tlcsdm" ^
-            --description "windowMonitor Windows Service" ^
-            --dest .
-    """
-    bat "ren windowMonitor-${version}.msi windowMonitor-service_${version}_b${BUILD_NUMBER}.msi"
-    bat "if exist jpackage-input rmdir /s /q jpackage-input"
 }
