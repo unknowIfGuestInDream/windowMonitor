@@ -72,6 +72,39 @@ jobs:
           Write-Host "Created dist/windowMonitor-windows-$env:APP_VERSION.zip"
           Remove-Item -Path 'staging' -Recurse -Force
 
+      - name: Create Windows Service installer (jpackage)
+        shell: pwsh
+        run: |
+          $jpackageInput = 'jpackage-input'
+          New-Item -ItemType Directory -Path $jpackageInput -Force | Out-Null
+          Copy-Item -Path "target\$env:APP_JAR" -Destination $jpackageInput
+
+          jpackage `
+            --input $jpackageInput `
+            --name windowMonitor `
+            --main-jar $env:APP_JAR `
+            --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader `
+            --type msi `
+            --launcher-as-service `
+            --win-dir-chooser `
+            --win-menu `
+            --win-menu-group "windowMonitor" `
+            --app-version $env:APP_VERSION `
+            --vendor "Tlcsdm" `
+            --description "windowMonitor Windows Service" `
+            --dest dist/
+
+          $msiFile = Get-ChildItem -Path "dist\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -ne $msiFile) {
+            $newName = "windowMonitor-windows-service-$env:APP_VERSION.msi"
+            Rename-Item -Path $msiFile.FullName -NewName $newName
+            Write-Host "Created dist/$newName"
+          } else {
+            Write-Error "No MSI file found after jpackage"
+          }
+
+          Remove-Item -Path $jpackageInput -Recurse -Force
+
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
