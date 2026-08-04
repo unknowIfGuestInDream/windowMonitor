@@ -7,7 +7,7 @@ pipeline {
         USER_NAME = 'Jenkins'
     }
     tools {
-        jdk "jdk21"
+        jdk "jdk25"
     }
 
     stages {
@@ -45,8 +45,8 @@ pipeline {
 
         stage('Prepare JRE') {
             steps {
-                sh 'rm -f *linux*21*.tar.gz *mac*21*.tar.gz *windows*21*.zip || true'
-                copyArtifacts filter: '*linux*21*,*mac*21*,*windows*21*', fingerprintArtifacts: true, projectName: 'env/JRE', selector: lastSuccessful()
+                sh 'rm -f *linux*25*.tar.gz *mac*25*.tar.gz *windows*25*.zip || true'
+                copyArtifacts filter: '*linux*25*,*mac*25*,*windows*25*', fingerprintArtifacts: true, projectName: 'env/JRE', selector: lastSuccessful()
                 sh 'java -version'
                 sh "$M2_HOME/bin/mvn -version"
             }
@@ -64,7 +64,7 @@ pipeline {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     sh "$M2_HOME/bin/mvn -B --no-transfer-progress -s $M2_HOME/conf/settings.xml -Dmaven.test.skip=true -Dmaven.compile.fork=true -Duser.name=${USER_NAME} clean package"
-                    sh "rm -rf jretemp && mkdir -v jretemp && unzip -q *windows*21*.zip -d jretemp"
+                    sh "rm -rf jretemp && mkdir -v jretemp && unzip -q *windows*25*.zip -d jretemp"
                     sh "mv jretemp/* jretemp/jre"
                 }
             }
@@ -94,7 +94,7 @@ pipeline {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     sh "$M2_HOME/bin/mvn -B --no-transfer-progress -s $M2_HOME/conf/settings.xml -Dmaven.test.skip=true -Dmaven.compile.fork=true -Duser.name=${USER_NAME} clean package"
-                    sh "rm -rf jretemp && mkdir -v jretemp && tar -xzf *mac*21*.tar.gz -C jretemp"
+                    sh "rm -rf jretemp && mkdir -v jretemp && tar -xzf *mac*25*.tar.gz -C jretemp"
                     sh "mv jretemp/* jretemp/jre"
                 }
             }
@@ -124,7 +124,7 @@ pipeline {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     sh "$M2_HOME/bin/mvn -B --no-transfer-progress -s $M2_HOME/conf/settings.xml -Dmaven.test.skip=true -Dmaven.compile.fork=true -Duser.name=${USER_NAME} clean package"
-                    sh "rm -rf jretemp && mkdir -v jretemp && tar -xzf *linux*21*.tar.gz -C jretemp"
+                    sh "rm -rf jretemp && mkdir -v jretemp && tar -xzf *linux*25*.tar.gz -C jretemp"
                     sh "mv jretemp/* jretemp/jre"
                 }
             }
