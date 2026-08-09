@@ -116,7 +116,7 @@ jobs:
             --input $jpackageInput `
             --name "Windows Monitor" `
             --main-jar $env:APP_JAR `
-            --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader `
+            --main-class com.tlcsdm.windowmonitor.WindowsServiceLauncher `
             --type msi `
             --launcher-as-service `
             --resource-dir jpackage-resources `
