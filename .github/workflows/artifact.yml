@@ -23,9 +23,30 @@ jobs:
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      - name: Resolve version & stage files (Windows)
+      - name: Resolve version & jar (Windows)
         shell: pwsh
-        run: scripts\prepare-windows-build.ps1
+        run: |
+          $versionOutput = & mvn -q -DforceStdout 'help:evaluate' -Dexpression='project.version' 2>$null
+          $version = $versionOutput.Trim()
+          if (-not $version) { throw 'Failed to extract version from Maven' }
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version" -Encoding utf8
+
+          $jarName = "windowMonitor-$version.jar"
+          $jar = Get-ChildItem -Path "target\$jarName" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $jar) { throw "No jar file found matching pattern target\$jarName" }
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_JAR=$($jar.Name)" -Encoding utf8
+
+          if (-not (Test-Path dist)) { New-Item -ItemType Directory -Path dist | Out-Null }
+          $jarFull = $jar.FullName
+
+          # Create staging directory
+          $stagingDir = 'staging'
+          if (-not (Test-Path $stagingDir)) { New-Item -ItemType Directory -Path $stagingDir | Out-Null }
+
+          # Copy files to staging
+          Copy-Item -Path $jarFull -Destination $stagingDir
+          Copy-Item -Path 'README.md' -Destination $stagingDir
+          Copy-Item -Path 'scripts\win\*' -Destination $stagingDir -Recurse
 
       - name: Download JRE (Windows)
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
@@ -42,9 +63,84 @@ jobs:
           Write-Host "Created dist/windowMonitor-windows-$env:APP_VERSION.zip"
           Remove-Item -Path 'staging' -Recurse -Force
 
+      - name: Prepare service installer for jpackage
+        shell: pwsh
+        run: |
+          $resourceDir = 'jpackage-resources'
+          New-Item -ItemType Directory -Path $resourceDir -Force | Out-Null
+
+          $expectedHash = '727D1E42275C605E0F04ABA98095C38A8E1E46DEF453CDFFCE42869428AA6743'
+          $urls = @(
+            'https://github.com/HandSonic/nssm/releases/download/2.24/nssm-2.24.zip',
+            'https://nssm.cc/release/nssm-2.24.zip'
+          )
+
+          $downloaded = $false
+          foreach ($url in $urls) {
+            try {
+              Write-Host "Downloading NSSM from: $url"
+              Invoke-WebRequest -Uri $url -OutFile nssm.zip -UseBasicParsing
+              $actualHash = (Get-FileHash -Path nssm.zip -Algorithm SHA256).Hash
+              if ($actualHash -ne $expectedHash) {
+                Write-Host "Hash mismatch from $url (expected $expectedHash, got $actualHash)"
+                Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
+                continue
+              }
+              $downloaded = $true
+              Write-Host "Successfully downloaded NSSM from $url"
+              break
+            } catch {
+              Write-Host "Failed to download from ${url}: $_"
+              Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
+            }
+          }
+          if (-not $downloaded) { throw 'Failed to download NSSM from all sources' }
+
+          Expand-Archive -Path nssm.zip -DestinationPath nssm-extract -Force
+          $nssmExe = 'nssm-extract\nssm-2.24\win64\nssm.exe'
+          if (-not (Test-Path $nssmExe)) {
+            throw "nssm.exe not found at expected path: $nssmExe"
+          }
+          Copy-Item -Path $nssmExe -Destination "$resourceDir\service-installer.exe"
+          Remove-Item -Path nssm.zip, nssm-extract -Recurse -Force
+          Write-Host "Prepared service-installer.exe in $resourceDir"
+
       - name: Create Windows Service installer (jpackage)
         shell: pwsh
-        run: scripts\build-service.ps1 -AppJar $env:APP_JAR -AppVersion $env:APP_VERSION
+        run: |
+          $jpackageInput = 'jpackage-input'
+          New-Item -ItemType Directory -Path $jpackageInput -Force | Out-Null
+          Copy-Item -Path "target\$env:APP_JAR" -Destination $jpackageInput
+
+          jpackage `
+            --input $jpackageInput `
+            --name windowMonitor `
+            --main-jar $env:APP_JAR `
+            --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader `
+            --type msi `
+            --launcher-as-service `
+            --resource-dir jpackage-resources `
+            --win-dir-chooser `
+            --win-menu `
+            --win-menu-group "windowMonitor" `
+            --win-upgrade-uuid "09b6b7b5-7784-4bf4-a638-1fccd8eeab77" `
+            --license-file LICENSE `
+            --app-version $env:APP_VERSION `
+            --vendor "Tlcsdm" `
+            --description "windowMonitor Windows Service" `
+            --dest dist/
+
+          $msiFile = Get-ChildItem -Path "dist\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -ne $msiFile) {
+            $newName = "windowMonitor-windows-service-$env:APP_VERSION.msi"
+            Rename-Item -Path $msiFile.FullName -NewName $newName
+            Write-Host "Created dist/$newName"
+          } else {
+            Write-Error "No MSI file found after jpackage"
+          }
+
+          Remove-Item -Path $jpackageInput -Recurse -Force
+          Remove-Item -Path jpackage-resources -Recurse -Force
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v7
