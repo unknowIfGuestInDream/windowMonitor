@@ -23,30 +23,9 @@ jobs:
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      - name: Resolve version & jar (Windows)
+      - name: Resolve version & stage files (Windows)
         shell: pwsh
-        run: |
-          $versionOutput = & mvn -q -DforceStdout 'help:evaluate' -Dexpression='project.version' 2>$null
-          $version = $versionOutput.Trim()
-          if (-not $version) { throw 'Failed to extract version from Maven' }
-          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version" -Encoding utf8
-
-          $jarName = "windowMonitor-$version.jar"
-          $jar = Get-ChildItem -Path "target\$jarName" -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($null -eq $jar) { throw "No jar file found matching pattern target\$jarName" }
-          Add-Content -Path $env:GITHUB_ENV -Value "APP_JAR=$($jar.Name)" -Encoding utf8
-
-          if (-not (Test-Path dist)) { New-Item -ItemType Directory -Path dist | Out-Null }
-          $jarFull = $jar.FullName
-
-          # Create staging directory
-          $stagingDir = 'staging'
-          if (-not (Test-Path $stagingDir)) { New-Item -ItemType Directory -Path $stagingDir | Out-Null }
-
-          # Copy files to staging
-          Copy-Item -Path $jarFull -Destination $stagingDir
-          Copy-Item -Path 'README.md' -Destination $stagingDir
-          Copy-Item -Path 'scripts\win\*' -Destination $stagingDir -Recurse
+        run: scripts\prepare-windows-build.ps1
 
       - name: Download JRE (Windows)
         if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'

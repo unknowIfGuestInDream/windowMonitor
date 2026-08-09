@@ -34,7 +34,7 @@
       1. Creates a jpackage resource directory and downloads NSSM (the service installer helper).
       2. Generates the icon file used for the Windows service entry.
       3. Invokes jpackage to produce an MSI that registers the application as a
-         Windows service named "WindowMonitor".
+         Windows service named "windowMonitor".
       4. Renames the resulting MSI to a versioned filename and moves it to ./dist/.
 
 .PARAMETER AppJar
@@ -153,12 +153,12 @@ if (Test-Path $iconSource) {
 
 # ── Step 4: Build MSI with jpackage ──────────────────────────────────────────
 Write-Host '[Step 4/4] Building Windows Service MSI with jpackage...'
-Write-Host "  Service name         : WindowMonitor"
+Write-Host "  Service name         : windowMonitor"
 Write-Host "  App version          : $AppVersion"
 
 jpackage `
     --input           $jpackageInput `
-    --name            "WindowMonitor" `
+    --name            "windowMonitor" `
     --main-jar        $AppJar `
     --main-class      com.tlcsdm.windowmonitor.WindowMonitorUploader `
     --type            msi `
@@ -166,12 +166,12 @@ jpackage `
     --resource-dir    $resourceDir `
     --win-dir-chooser `
     --win-menu `
-    --win-menu-group  "Windows Monitor" `
+    --win-menu-group  "windowMonitor" `
     --win-upgrade-uuid "09b6b7b5-7784-4bf4-a638-1fccd8eeab77" `
     --license-file    LICENSE `
     --app-version     $AppVersion `
     --vendor          "Tlcsdm" `
-    --description     "Windows Monitor - Monitors active window and uploads screenshots to WebDAV storage." `
+    --description     "windowMonitor Windows Service" `
     --dest            $DistDir
 
 if ($LASTEXITCODE -ne 0) {
