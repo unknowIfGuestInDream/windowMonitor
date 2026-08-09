@@ -1,0 +1,13 @@
+<service>
+    <id>WindowsMonitor</id>
+    <name>Windows Monitor</name>
+    <description>Windows Monitor - monitors active window and uploads screenshots via WebDAV.</description>
+    <executable>%BASE%\jre\bin\javaw.exe</executable>
+    <arguments>-jar "%BASE%\windowMonitor-1.0.0.jar"</arguments>
+    <logmode>rotate</logmode>
+    <log>
+        <logpath>%BASE%\logs</logpath>
+    </log>
+    <!-- Allow the service to interact with the desktop (登录选项卡 -> 允许服务与桌面交互) -->
+    <interactive>true</interactive>
+</service>
