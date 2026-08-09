@@ -123,20 +123,21 @@ jobs:
 
           jpackage `
             --input $jpackageInput `
-            --name windowMonitor `
+            --name "Windows Monitor" `
             --main-jar $env:APP_JAR `
             --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader `
             --type msi `
             --launcher-as-service `
             --resource-dir jpackage-resources `
+            --icon src/main/resources/windowMonitor.ico `
             --win-dir-chooser `
             --win-menu `
-            --win-menu-group "windowMonitor" `
+            --win-menu-group "Windows Monitor" `
             --win-upgrade-uuid "09b6b7b5-7784-4bf4-a638-1fccd8eeab77" `
             --license-file LICENSE `
             --app-version $env:APP_VERSION `
             --vendor "Tlcsdm" `
-            --description "windowMonitor Windows Service" `
+            --description "Windows Monitor Service" `
             --dest dist/
 
           $msiFile = Get-ChildItem -Path "dist\*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -150,6 +151,30 @@ jobs:
 
           Remove-Item -Path $jpackageInput -Recurse -Force
           Remove-Item -Path jpackage-resources -Recurse -Force
+
+      - name: Enable service desktop interaction in MSI
+        shell: pwsh
+        run: |
+          $msiFile = Get-ChildItem -Path "dist\windowMonitor-windows-service-*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $msiFile) { throw "MSI file not found in dist/" }
+
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          # msiOpenDatabaseModeTransact = 1
+          $database = $installer.GetType().InvokeMember(
+            "OpenDatabase", [System.Reflection.BindingFlags]::InvokeMethod, $null, $installer,
+            @($msiFile.FullName, 1))
+
+          # SERVICE_WIN32_OWN_PROCESS (16) | SERVICE_INTERACTIVE_PROCESS (256) = 272
+          $view = $database.GetType().InvokeMember(
+            "OpenView", [System.Reflection.BindingFlags]::InvokeMethod, $null, $database,
+            @("UPDATE ServiceInstall SET ServiceType = 272 WHERE ServiceType = 16"))
+          $view.GetType().InvokeMember(
+            "Execute", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view, $null) | Out-Null
+
+          $database.GetType().InvokeMember(
+            "Commit", [System.Reflection.BindingFlags]::InvokeMethod, $null, $database, $null) | Out-Null
+
+          Write-Host "Set ServiceType=272 (interactive) in $($msiFile.Name)"
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v3
