@@ -143,14 +143,14 @@ jobs:
           Remove-Item -Path jpackage-resources -Recurse -Force
 
       - name: Upload portable artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windowMonitor-windows
           path: dist/windowMonitor-windows-${{ env.APP_VERSION }}.zip
           retention-days: 7
 
       - name: Upload service installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windowMonitor-windows-service
           path: dist/windowMonitor-windows-service-${{ env.APP_VERSION }}.msi
