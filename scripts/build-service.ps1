@@ -86,48 +86,59 @@ if (-not (Test-Path $jarPath)) {
 Copy-Item -Path $jarPath -Destination $jpackageInput
 Write-Host "  Copied $AppJar -> $jpackageInput\"
 
-# ── Step 3: Download NSSM (service installer helper) and copy icon ────────────
-Write-Host '[Step 3/4] Downloading NSSM service installer helper...'
+# ── Step 3: Obtain NSSM (service installer helper) and copy icon ──────────────
+Write-Host '[Step 3/4] Obtaining NSSM service installer helper...'
 
-$expectedHash = '727D1E42275C605E0F04ABA98095C38A8E1E46DEF453CDFFCE42869428AA6743'
-$urls = @(
-    'https://github.com/HandSonic/nssm/releases/download/2.24/nssm-2.24.zip',
-    'https://nssm.cc/release/nssm-2.24.zip'
-)
+# Check if nssm is already available in the environment PATH.
+# If so, use it directly and skip the download entirely.
+$nssmOnPath = Get-Command nssm -ErrorAction SilentlyContinue
+if ($null -ne $nssmOnPath) {
+    Write-Host "  nssm found in PATH: $($nssmOnPath.Source) — skipping download"
+    Copy-Item -Path $nssmOnPath.Source -Destination "$resourceDir\service-installer.exe"
+    Write-Host "  Placed service-installer.exe in $resourceDir\"
+} else {
+    Write-Host "  nssm not found in PATH — downloading..."
 
-$downloaded = $false
-foreach ($url in $urls) {
-    try {
-        Write-Host "  Trying: $url"
-        Invoke-WebRequest -Uri $url -OutFile nssm.zip -UseBasicParsing
-        $actualHash = (Get-FileHash -Path nssm.zip -Algorithm SHA256).Hash
-        if ($actualHash -ne $expectedHash) {
-            Write-Host "  Hash mismatch (expected $expectedHash, got $actualHash) — skipping"
+    $expectedHash = '727D1E42275C605E0F04ABA98095C38A8E1E46DEF453CDFFCE42869428AA6743'
+    $urls = @(
+        'https://github.com/HandSonic/nssm/releases/download/2.24/nssm-2.24.zip',
+        'https://nssm.cc/release/nssm-2.24.zip'
+    )
+
+    $downloaded = $false
+    foreach ($url in $urls) {
+        try {
+            Write-Host "  Trying: $url"
+            Invoke-WebRequest -Uri $url -OutFile nssm.zip -UseBasicParsing
+            $actualHash = (Get-FileHash -Path nssm.zip -Algorithm SHA256).Hash
+            if ($actualHash -ne $expectedHash) {
+                Write-Host "  Hash mismatch (expected $expectedHash, got $actualHash) — skipping"
+                Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
+                continue
+            }
+            $downloaded = $true
+            Write-Host "  Download verified (SHA-256 OK)"
+            break
+        } catch {
+            Write-Host "  Failed: $_"
             Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
-            continue
         }
-        $downloaded = $true
-        Write-Host "  Download verified (SHA-256 OK)"
-        break
-    } catch {
-        Write-Host "  Failed: $_"
-        Remove-Item -Path nssm.zip -Force -ErrorAction SilentlyContinue
     }
-}
-if (-not $downloaded) {
-    throw 'Failed to download NSSM from all configured sources.'
-}
+    if (-not $downloaded) {
+        throw 'Failed to download NSSM from all configured sources.'
+    }
 
-# Extract NSSM and place it in the resource directory as service-installer.exe
-Write-Host '  Extracting NSSM...'
-Expand-Archive -Path nssm.zip -DestinationPath nssm-extract -Force
-$nssmExe = 'nssm-extract\nssm-2.24\win64\nssm.exe'
-if (-not (Test-Path $nssmExe)) {
-    throw "nssm.exe not found at expected path: $nssmExe"
+    # Extract NSSM and place it in the resource directory as service-installer.exe
+    Write-Host '  Extracting NSSM...'
+    Expand-Archive -Path nssm.zip -DestinationPath nssm-extract -Force
+    $nssmExe = 'nssm-extract\nssm-2.24\win64\nssm.exe'
+    if (-not (Test-Path $nssmExe)) {
+        throw "nssm.exe not found at expected path: $nssmExe"
+    }
+    Copy-Item -Path $nssmExe -Destination "$resourceDir\service-installer.exe"
+    Remove-Item -Path nssm.zip, nssm-extract -Recurse -Force
+    Write-Host "  Placed service-installer.exe in $resourceDir\"
 }
-Copy-Item -Path $nssmExe -Destination "$resourceDir\service-installer.exe"
-Remove-Item -Path nssm.zip, nssm-extract -Recurse -Force
-Write-Host "  Placed service-installer.exe in $resourceDir\"
 
 # Copy the Windows Monitor service icon into the jpackage resource directory.
 # jpackage picks up windowmonitor.ico from --resource-dir and uses it for the
