@@ -32,6 +32,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.logging.Handler;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -111,5 +113,33 @@ public class WindowsServiceLauncherTest {
             }
         }
         return null;
+    }
+
+    /**
+     * {@link WindowsServiceLauncher#configureFileLogging} should create a {@code logs/}
+     * directory under the install dir and register a {@link java.util.logging.FileHandler}
+     * on the root logger.
+     */
+    @Test
+    void testConfigureFileLoggingCreatesLogDirectory(@TempDir Path installDir) throws Exception {
+        Logger rootLogger = Logger.getLogger("");
+        int handlersBefore = rootLogger.getHandlers().length;
+
+        WindowsServiceLauncher.configureFileLogging(installDir);
+
+        Path logsDir = installDir.resolve("logs");
+        assertTrue(Files.isDirectory(logsDir), "logs/ directory should be created");
+
+        // At least one additional FileHandler should have been added to the root logger
+        int handlersAfter = rootLogger.getHandlers().length;
+        assertTrue(handlersAfter > handlersBefore, "A FileHandler should have been added to the root logger");
+
+        // Clean up: close and remove the file handlers added by this test
+        for (Handler h : rootLogger.getHandlers()) {
+            if (h instanceof java.util.logging.FileHandler) {
+                h.close();
+                rootLogger.removeHandler(h);
+            }
+        }
     }
 }

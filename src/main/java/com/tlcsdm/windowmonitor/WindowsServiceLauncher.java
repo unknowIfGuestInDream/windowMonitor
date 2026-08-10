@@ -27,12 +27,15 @@
 
 package com.tlcsdm.windowmonitor;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 
 /**
  * Windows service launcher for jpackage-packaged builds.
@@ -58,11 +61,11 @@ public class WindowsServiceLauncher {
     private static final Logger log = Logger.getLogger(WindowsServiceLauncher.class.getName());
 
     public static void main(String[] args) throws Exception {
-        log.info("WindowsServiceLauncher starting...");
-
-        // Resolve the directory where the application JAR lives so that the
-        // updater can locate release assets and write its sentinel file.
+        // Resolve install dir early so we can direct logs there from the start.
         Path installDir = resolveInstallDir();
+        configureFileLogging(installDir);
+
+        log.info("WindowsServiceLauncher starting...");
 
         // Load update configuration (bundled defaults + optional external override)
         UpdateConfig config = UpdateConfig.load(installDir);
@@ -115,6 +118,35 @@ public class WindowsServiceLauncher {
 
         // Keep the main thread alive while the monitor is running
         monitorThread.join();
+    }
+
+    /**
+     * Configures a rolling file handler that writes log records to
+     * {@code logs/windowMonitor.log} inside the install directory.
+     *
+     * <p>Up to 10 log files of 10 MB each are kept (rotating). A
+     * {@link SimpleFormatter} is used so the output is human-readable.
+     * If the log directory cannot be created or the handler cannot be
+     * attached, a warning is printed to stderr and the application
+     * continues using only the console handler.
+     *
+     * @param installDir the directory that contains the installed application
+     */
+    static void configureFileLogging(Path installDir) {
+        try {
+            Path logDir = installDir.resolve("logs");
+            Files.createDirectories(logDir);
+            String pattern = logDir.resolve("windowMonitor%g.log").toString();
+            // 10 MB per file, 10 rotating files, append mode
+            FileHandler fileHandler = new FileHandler(pattern, 10 * 1024 * 1024, 10, true);
+            fileHandler.setFormatter(new SimpleFormatter());
+            fileHandler.setLevel(Level.ALL);
+            Logger rootLogger = Logger.getLogger("");
+            rootLogger.addHandler(fileHandler);
+            rootLogger.setLevel(Level.INFO);
+        } catch (IOException e) {
+            System.err.println("[WindowsServiceLauncher] Failed to configure file logging: " + e.getMessage());
+        }
     }
 
     /**
