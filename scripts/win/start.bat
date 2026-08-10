@@ -16,6 +16,6 @@ if not %errorlevel% == 0 (
 set java_path=javaw
 )
 :START
-cmd /c start /b %java_path% -jar windowMonitor-1.0.0.jar
+cmd /c start /b %java_path% -jar windowMonitor-1.0.1.jar
 
 :END
