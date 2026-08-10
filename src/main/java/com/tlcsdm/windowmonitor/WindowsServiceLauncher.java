@@ -178,6 +178,14 @@ public class WindowsServiceLauncher {
      * <p>Falls back to the current working directory if the code location cannot
      * be determined (e.g. when running from an IDE or exploded classpath).
      *
+     * <p>When jpackage packages the application, the JAR is placed inside an
+     * {@code app/} subdirectory while the launcher executable ({@code windowMonitor.exe})
+     * resides in the parent directory. This method automatically walks up to the
+     * parent when the resolved directory is named {@code app} and the parent
+     * directory contains the launcher executable, so that {@link #launchMonitorExe}
+     * can locate {@code windowMonitor.exe} regardless of which executable (including
+     * an NSSM install helper) was used to start the service.
+     *
      * @return the install directory {@link Path}
      */
     static Path resolveInstallDir() {
@@ -189,11 +197,26 @@ public class WindowsServiceLauncher {
                             .getLocation()
                             .toURI()
             );
-            // If running from a JAR, the parent is the install directory.
+            // If running from a JAR, the parent is the directory containing that JAR.
             // If running from a class directory (IDE), use that directory directly.
-            return codeSource.toFile().isFile()
+            Path dir = codeSource.toFile().isFile()
                     ? codeSource.getParent()
                     : codeSource;
+
+            // jpackage places the JAR inside an "app/" subdirectory while the
+            // launcher exe lives in the parent. Walk up so that launchMonitorExe
+            // can find windowMonitor.exe even when the service was registered via
+            // an NSSM helper exe located in the parent directory.
+            if (dir != null && "app".equalsIgnoreCase(dir.getFileName().toString())) {
+                Path parent = dir.getParent();
+                if (parent != null && (Files.isRegularFile(parent.resolve("windowMonitor.exe"))
+                        || Files.isRegularFile(parent.resolve("windowmonitor.exe")))) {
+                    log.info("Detected jpackage app/ subdirectory; using parent as install dir: " + parent);
+                    return parent;
+                }
+            }
+
+            return dir;
         } catch (Exception e) {
             log.log(Level.WARNING, "Could not resolve install directory, using current directory.", e);
             return Path.of(".");
