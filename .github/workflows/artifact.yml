@@ -56,6 +56,14 @@ jobs:
           & ..\scripts\jre.ps1
           Pop-Location
 
+      - name: Generate release.txt
+        shell: pwsh
+        run: |
+          $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss UTC")
+          $content = "Version: $env:APP_VERSION`nBuild-Time: $buildTime"
+          Set-Content -Path "staging\release.txt" -Value $content -Encoding utf8
+          Write-Host "Generated staging\release.txt"
+
       - name: Package artifact (Windows)
         shell: pwsh
         run: |
@@ -112,11 +120,15 @@ jobs:
           New-Item -ItemType Directory -Path $jpackageInput -Force | Out-Null
           Copy-Item -Path "target\$env:APP_JAR" -Destination $jpackageInput
 
+          $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss UTC")
+          Set-Content -Path "$jpackageInput\release.txt" -Value "Version: $env:APP_VERSION`nBuild-Time: $buildTime" -Encoding utf8
+          Write-Host "Generated $jpackageInput\release.txt"
+
           jpackage `
             --input $jpackageInput `
             --name "Windows Monitor" `
             --main-jar $env:APP_JAR `
-            --main-class com.tlcsdm.windowmonitor.WindowMonitorUploader `
+            --main-class com.tlcsdm.windowmonitor.WindowsServiceLauncher `
             --type msi `
             --launcher-as-service `
             --resource-dir jpackage-resources `

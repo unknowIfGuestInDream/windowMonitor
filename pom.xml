@@ -33,7 +33,7 @@
 
     <groupId>com.tlcsdm.windowmonitor</groupId>
     <artifactId>windowMonitor</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
     <name>windowMonitor</name>
     <inceptionYear>2025</inceptionYear>
