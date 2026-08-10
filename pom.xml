@@ -35,7 +35,7 @@
     <artifactId>windowMonitor</artifactId>
     <version>1.0.1</version>
     <packaging>jar</packaging>
-    <name>windowMonitor</name>
+    <name>Windows Monitor</name>
     <inceptionYear>2025</inceptionYear>
 
     <properties>

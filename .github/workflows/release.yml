@@ -135,7 +135,7 @@ jobs:
 
           jpackage `
             --input $jpackageInput `
-            --name "Windows Monitor" `
+            --name windowMonitor `
             --main-jar $env:APP_JAR `
             --main-class com.tlcsdm.windowmonitor.WindowsServiceLauncher `
             --type msi `
@@ -183,10 +183,24 @@ jobs:
           $view.GetType().InvokeMember(
             "Execute", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view, $null) | Out-Null
 
+          # Set service DisplayName to "Windows Monitor"
+          $view2 = $database.GetType().InvokeMember(
+            "OpenView", [System.Reflection.BindingFlags]::InvokeMethod, $null, $database,
+            @("UPDATE ServiceInstall SET DisplayName = 'Windows Monitor'"))
+          $view2.GetType().InvokeMember(
+            "Execute", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view2, $null) | Out-Null
+
+          # Set MSI ProductName to "Windows Monitor"
+          $view3 = $database.GetType().InvokeMember(
+            "OpenView", [System.Reflection.BindingFlags]::InvokeMethod, $null, $database,
+            @("UPDATE Property SET Value = 'Windows Monitor' WHERE Property = 'ProductName'"))
+          $view3.GetType().InvokeMember(
+            "Execute", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view3, $null) | Out-Null
+
           $database.GetType().InvokeMember(
             "Commit", [System.Reflection.BindingFlags]::InvokeMethod, $null, $database, $null) | Out-Null
 
-          Write-Host "Set ServiceType=272 (interactive) in $($msiFile.Name)"
+          Write-Host "Set ServiceType=272 (interactive), DisplayName='Windows Monitor', ProductName='Windows Monitor' in $($msiFile.Name)"
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v3
