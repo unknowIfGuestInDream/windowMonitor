@@ -43,12 +43,27 @@ import java.util.logging.SimpleFormatter;
  * <p>This class is used as the main entry point when windowMonitor is run as a
  * Windows service (e.g. via {@code sc.exe} or NSSM). Its responsibilities are:
  * <ol>
- *   <li><b>Start the main monitoring application</b> in a background thread.</li>
+ *   <li><b>Start the main monitoring application</b> by launching the installed
+ *       {@code windowMonitor.exe} from the install directory as a child process.
+ *       This ensures that the installed version of the application is always used,
+ *       and that any update applied to the install directory takes effect on the
+ *       next service restart.</li>
  *   <li><b>Perform a daily update check</b> using {@link AutoUpdater}.
- *       When an update is successfully applied the JVM is restarted so the new
- *       version takes effect immediately. If the update fails the current version
- *       continues running without interruption.</li>
+ *       When an update is successfully applied the service should be restarted
+ *       externally (e.g. by the service manager) so the new version takes effect.
+ *       If the update fails the current version continues running without
+ *       interruption.</li>
  * </ol>
+ *
+ * <p><b>Avoiding the recursive-spawn loop:</b> The Windows service is configured
+ * to invoke {@code windowMonitor.exe} with this class ({@code WindowsServiceLauncher})
+ * as the main entry point.  When this launcher then starts the installed
+ * {@code windowMonitor.exe}, it must NOT forward the original command-line
+ * arguments: those arguments contain the class-override that would cause the child
+ * process to also run {@code WindowsServiceLauncher}, spawning another child, and
+ * so on indefinitely.  The child exe is therefore always started with no extra
+ * arguments, causing it to use the JAR manifest's default main class
+ * ({@link WindowMonitorUploader}).
  *
  * <p>The install directory is derived from the location of the running JAR file.
  * The update configuration is loaded from {@code update.properties} on the
@@ -70,11 +85,13 @@ public class WindowsServiceLauncher {
         // Load update configuration (bundled defaults + optional external override)
         UpdateConfig config = UpdateConfig.load(installDir);
 
-        // 1. Launch the monitoring application exe from the install directory.
-        //    Running the packaged exe (rather than invoking the class directly)
-        //    ensures that the correct installed version is used when the service
-        //    is managed by an external tool such as NSSM or sc.exe.
-        Process monitorProcess = launchMonitorExe(installDir, args);
+        // 1. Launch the installed windowMonitor.exe from the install directory.
+        //    The child process is started WITHOUT forwarding the original args.
+        //    Forwarding args would propagate the WindowsServiceLauncher class-override
+        //    into the child, causing the child to spawn another child — an infinite
+        //    recursive loop that exhausts memory.  With no extra args the child exe
+        //    runs the JAR manifest's default main class (WindowMonitorUploader).
+        Process monitorProcess = launchMonitorExe(installDir);
 
         // Wrap the process in a thread so we can join() on it below.
         Thread monitorThread = new Thread(() -> {
@@ -98,8 +115,7 @@ public class WindowsServiceLauncher {
                 try {
                     boolean updated = updater.checkAndUpdate();
                     if (updated) {
-                        log.info("Update applied. Restarting JVM to load the new version...");
-                        restartJvm(args);
+                        log.info("Update applied. Please restart the service to load the new version.");
                     }
                 } catch (Exception e) {
                     log.log(Level.WARNING, "Unexpected error in update thread.", e);
@@ -157,12 +173,18 @@ public class WindowsServiceLauncher {
      * found, the method falls back to launching the JAR with the bundled JRE so
      * that the service continues to function even in non-packaged deployments.
      *
+     * <p><b>No args are forwarded to the child process.</b>  The original
+     * command-line arguments that launched this {@code WindowsServiceLauncher}
+     * contain a class-override entry that would make the child exe re-run
+     * {@code WindowsServiceLauncher} instead of {@code WindowMonitorUploader},
+     * restarting the spawn loop.  By passing no extra arguments the child exe
+     * uses the JAR manifest's default main class ({@link WindowMonitorUploader}).
+     *
      * @param installDir the directory that contains the installed application
-     * @param args       command-line arguments forwarded to the child process
      * @return the started {@link Process}
      * @throws Exception if the process cannot be started
      */
-    static Process launchMonitorExe(Path installDir, String[] args) throws Exception {
+    static Process launchMonitorExe(Path installDir) throws Exception {
         // Preferred executable names (jpackage output on Windows)
         String[] exeNames = {"windowMonitor.exe", "windowmonitor.exe"};
         Path exePath = null;
@@ -194,9 +216,7 @@ public class WindowsServiceLauncher {
             command.add(appJar.toString());
         }
 
-        for (String arg : args) {
-            command.add(arg);
-        }
+        // NOTE: original args are intentionally NOT forwarded — see Javadoc above.
 
         log.info("Launching monitor process: " + command);
         ProcessBuilder pb = new ProcessBuilder(command);
@@ -248,51 +268,10 @@ public class WindowsServiceLauncher {
                 }
             }
 
-            return dir;
+            return dir != null ? dir : Path.of(".");
         } catch (Exception e) {
             log.log(Level.WARNING, "Could not resolve install directory, using current directory.", e);
             return Path.of(".");
-        }
-    }
-
-    /**
-     * Restarts the JVM process by re-executing the java command with the same
-     * arguments that were used to start the current process.
-     *
-     * <p>This is a best-effort restart; if the JVM cannot be restarted (e.g. the
-     * process handle is not available), a warning is logged and the current process
-     * continues running with the old version until it is stopped externally.
-     *
-     * @param originalArgs the {@code main} method arguments to pass to the new JVM
-     */
-    static void restartJvm(String[] originalArgs) {
-        try {
-            ProcessHandle current = ProcessHandle.current();
-            ProcessHandle.Info info = current.info();
-
-            String javaCmd = info.command().orElse(null);
-            if (javaCmd == null) {
-                log.warning("Cannot restart JVM: process command not available.");
-                return;
-            }
-
-            ProcessBuilder pb = new ProcessBuilder();
-            pb.command().add(javaCmd);
-            info.arguments().ifPresent(jvmArgs -> {
-                for (String arg : jvmArgs) {
-                    pb.command().add(arg);
-                }
-            });
-            for (String arg : originalArgs) {
-                pb.command().add(arg);
-            }
-            pb.inheritIO();
-            pb.start();
-
-            log.info("New process started. Exiting current process.");
-            System.exit(0);
-        } catch (Exception e) {
-            log.log(Level.WARNING, "JVM restart failed; continuing with current version.", e);
         }
     }
 }
