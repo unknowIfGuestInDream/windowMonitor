@@ -30,8 +30,6 @@ package com.tlcsdm.windowmonitor;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -43,12 +41,19 @@ import java.util.logging.SimpleFormatter;
  * <p>This class is used as the main entry point when windowMonitor is run as a
  * Windows service (e.g. via {@code sc.exe} or NSSM). Its responsibilities are:
  * <ol>
- *   <li><b>Start the main monitoring application</b> in a background thread.</li>
+ *   <li><b>Start the main monitoring application</b> ({@link WindowMonitorUploader})
+ *       in a background thread within the same JVM process.</li>
  *   <li><b>Perform a daily update check</b> using {@link AutoUpdater}.
- *       When an update is successfully applied the JVM is restarted so the new
- *       version takes effect immediately. If the update fails the current version
- *       continues running without interruption.</li>
+ *       When an update is successfully applied the service should be restarted
+ *       externally (e.g. by the service manager) so the new version takes effect.
+ *       If the update fails the current version continues running without
+ *       interruption.</li>
  * </ol>
+ *
+ * <p><b>Important:</b> The monitoring logic ({@link WindowMonitorUploader}) is
+ * executed directly in-process rather than by spawning a child process.  Spawning
+ * {@code windowMonitor.exe} from within a service that itself started via
+ * {@code windowMonitor.exe} would create an infinite chain of processes.
  *
  * <p>The install directory is derived from the location of the running JAR file.
  * The update configuration is loaded from {@code update.properties} on the
@@ -70,23 +75,21 @@ public class WindowsServiceLauncher {
         // Load update configuration (bundled defaults + optional external override)
         UpdateConfig config = UpdateConfig.load(installDir);
 
-        // 1. Launch the monitoring application exe from the install directory.
-        //    Running the packaged exe (rather than invoking the class directly)
-        //    ensures that the correct installed version is used when the service
-        //    is managed by an external tool such as NSSM or sc.exe.
-        Process monitorProcess = launchMonitorExe(installDir, args);
-
-        // Wrap the process in a thread so we can join() on it below.
+        // 1. Run the monitoring application in-process on a dedicated thread.
+        //    We deliberately do NOT spawn a child process here: launching
+        //    windowMonitor.exe from within a service whose entry point is also
+        //    WindowsServiceLauncher would cause an infinite spawn loop (each child
+        //    would spawn another child, exhausting memory).
+        final String[] monitorArgs = args;
         Thread monitorThread = new Thread(() -> {
             try {
-                int exitCode = monitorProcess.waitFor();
-                log.info("Monitor process exited with code: " + exitCode);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                monitorProcess.destroyForcibly();
+                log.info("Starting WindowMonitorUploader in-process...");
+                WindowMonitorUploader.main(monitorArgs);
+            } catch (Exception e) {
+                log.log(Level.SEVERE, "WindowMonitorUploader terminated with an error.", e);
             }
         }, "monitor-main");
-        monitorThread.setDaemon(true);
+        monitorThread.setDaemon(false);
         monitorThread.start();
 
         // 2. Perform a daily update check on a dedicated background thread.
@@ -98,8 +101,7 @@ public class WindowsServiceLauncher {
                 try {
                     boolean updated = updater.checkAndUpdate();
                     if (updated) {
-                        log.info("Update applied. Restarting JVM to load the new version...");
-                        restartJvm(args);
+                        log.info("Update applied. Please restart the service to load the new version.");
                     }
                 } catch (Exception e) {
                     log.log(Level.WARNING, "Unexpected error in update thread.", e);
@@ -150,73 +152,10 @@ public class WindowsServiceLauncher {
     }
 
     /**
-     * Launches the packaged {@code windowMonitor.exe} from the install directory.
-     *
-     * <p>Candidate executable names are tried in order: {@code windowMonitor.exe},
-     * then {@code windowmonitor.exe} (case-insensitive fallback).  If neither is
-     * found, the method falls back to launching the JAR with the bundled JRE so
-     * that the service continues to function even in non-packaged deployments.
-     *
-     * @param installDir the directory that contains the installed application
-     * @param args       command-line arguments forwarded to the child process
-     * @return the started {@link Process}
-     * @throws Exception if the process cannot be started
-     */
-    static Process launchMonitorExe(Path installDir, String[] args) throws Exception {
-        // Preferred executable names (jpackage output on Windows)
-        String[] exeNames = {"windowMonitor.exe", "windowmonitor.exe"};
-        Path exePath = null;
-        for (String name : exeNames) {
-            Path candidate = installDir.resolve(name);
-            if (Files.isRegularFile(candidate)) {
-                exePath = candidate;
-                break;
-            }
-        }
-
-        List<String> command = new ArrayList<>();
-        if (exePath != null) {
-            command.add(exePath.toString());
-        } else {
-            // Fallback: run via the bundled JRE if available, otherwise plain java
-            Path javaExe = installDir.resolve(Path.of("runtime", "bin", "java.exe"));
-            if (!Files.isRegularFile(javaExe)) {
-                javaExe = installDir.resolve(Path.of("jre", "bin", "java.exe"));
-            }
-            command.add(Files.isRegularFile(javaExe) ? javaExe.toString() : "java");
-            // Locate the application JAR in the install directory
-            Path appJar = installDir.resolve("windowMonitor.jar");
-            if (!Files.isRegularFile(appJar)) {
-                // Try app/ sub-directory used by jpackage
-                appJar = installDir.resolve(Path.of("app", "windowMonitor.jar"));
-            }
-            command.add("-jar");
-            command.add(appJar.toString());
-        }
-
-        for (String arg : args) {
-            command.add(arg);
-        }
-
-        log.info("Launching monitor process: " + command);
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.inheritIO();
-        return pb.start();
-    }
-
-    /**
      * Resolves the directory from which the application JAR was loaded.
      *
      * <p>Falls back to the current working directory if the code location cannot
      * be determined (e.g. when running from an IDE or exploded classpath).
-     *
-     * <p>When jpackage packages the application, the JAR is placed inside an
-     * {@code app/} subdirectory while the launcher executable ({@code windowMonitor.exe})
-     * resides in the parent directory. This method automatically walks up to the
-     * parent when the resolved directory is named {@code app} and the parent
-     * directory contains the launcher executable, so that {@link #launchMonitorExe}
-     * can locate {@code windowMonitor.exe} regardless of which executable (including
-     * an NSSM install helper) was used to start the service.
      *
      * @return the install directory {@link Path}
      */
@@ -234,65 +173,10 @@ public class WindowsServiceLauncher {
             Path dir = codeSource.toFile().isFile()
                     ? codeSource.getParent()
                     : codeSource;
-
-            // jpackage places the JAR inside an "app/" subdirectory while the
-            // launcher exe lives in the parent. Walk up so that launchMonitorExe
-            // can find windowMonitor.exe even when the service was registered via
-            // an NSSM helper exe located in the parent directory.
-            if (dir != null && "app".equalsIgnoreCase(dir.getFileName().toString())) {
-                Path parent = dir.getParent();
-                if (parent != null && (Files.isRegularFile(parent.resolve("windowMonitor.exe"))
-                        || Files.isRegularFile(parent.resolve("windowmonitor.exe")))) {
-                    log.info("Detected jpackage app/ subdirectory; using parent as install dir: " + parent);
-                    return parent;
-                }
-            }
-
-            return dir;
+            return dir != null ? dir : Path.of(".");
         } catch (Exception e) {
             log.log(Level.WARNING, "Could not resolve install directory, using current directory.", e);
             return Path.of(".");
-        }
-    }
-
-    /**
-     * Restarts the JVM process by re-executing the java command with the same
-     * arguments that were used to start the current process.
-     *
-     * <p>This is a best-effort restart; if the JVM cannot be restarted (e.g. the
-     * process handle is not available), a warning is logged and the current process
-     * continues running with the old version until it is stopped externally.
-     *
-     * @param originalArgs the {@code main} method arguments to pass to the new JVM
-     */
-    static void restartJvm(String[] originalArgs) {
-        try {
-            ProcessHandle current = ProcessHandle.current();
-            ProcessHandle.Info info = current.info();
-
-            String javaCmd = info.command().orElse(null);
-            if (javaCmd == null) {
-                log.warning("Cannot restart JVM: process command not available.");
-                return;
-            }
-
-            ProcessBuilder pb = new ProcessBuilder();
-            pb.command().add(javaCmd);
-            info.arguments().ifPresent(jvmArgs -> {
-                for (String arg : jvmArgs) {
-                    pb.command().add(arg);
-                }
-            });
-            for (String arg : originalArgs) {
-                pb.command().add(arg);
-            }
-            pb.inheritIO();
-            pb.start();
-
-            log.info("New process started. Exiting current process.");
-            System.exit(0);
-        } catch (Exception e) {
-            log.log(Level.WARNING, "JVM restart failed; continuing with current version.", e);
         }
     }
 }

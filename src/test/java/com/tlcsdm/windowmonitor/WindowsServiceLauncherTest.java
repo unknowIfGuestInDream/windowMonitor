@@ -35,7 +35,6 @@ import java.nio.file.Path;
 import java.util.logging.Handler;
 import java.util.logging.Logger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,72 +46,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class WindowsServiceLauncherTest {
 
     /**
-     * When jpackage places the JAR inside an {@code app/} subdirectory and the
-     * parent directory contains {@code windowMonitor.exe}, {@code resolveInstallDir}
-     * should walk up to the parent so that the service launcher finds the exe.
+     * {@link WindowsServiceLauncher#resolveInstallDir} should return a non-null path
+     * and not throw an exception when called from within the test classpath.
      */
     @Test
-    void testLaunchMonitorExeFindsExeInInstallDir(@TempDir Path installDir) throws Exception {
-        // Simulate jpackage structure: installDir/windowMonitor.exe + installDir/app/
-        Path exeFile = installDir.resolve("windowMonitor.exe");
-        Files.createFile(exeFile);
-
-        Path appDir = installDir.resolve("app");
-        Files.createDirectories(appDir);
-
-        // launchMonitorExe should resolve the exe from installDir
-        // We cannot start a real exe in tests, but we can verify it finds the path
-        // by checking that the command it would build starts with the correct exe.
-        // Instead, directly test the path resolution logic:
-        Path resolved = resolveExeInDir(installDir);
-        assertNotNull(resolved);
-        assertEquals(exeFile.toAbsolutePath(), resolved.toAbsolutePath());
-    }
-
-    /**
-     * When the install directory does NOT contain {@code windowMonitor.exe} but its
-     * parent does (jpackage app-subdir case), the launcher should still locate the exe.
-     */
-    @Test
-    void testLaunchMonitorExeFindsExeInParentOfAppDir(@TempDir Path installDir) throws Exception {
-        // Simulate running from inside app/ but exe is in parent
-        Path exeFile = installDir.resolve("windowMonitor.exe");
-        Files.createFile(exeFile);
-
-        Path appDir = installDir.resolve("app");
-        Files.createDirectories(appDir);
-
-        // Resolve exe as if installDir is the correct install directory
-        Path resolved = resolveExeInDir(installDir);
-        assertNotNull(resolved);
-        assertTrue(Files.isRegularFile(resolved), "Resolved exe path should exist: " + resolved);
-    }
-
-    /**
-     * When the install directory contains neither {@code windowMonitor.exe} nor
-     * {@code windowmonitor.exe}, the launcher falls back gracefully (no exe path).
-     */
-    @Test
-    void testLaunchMonitorExeFallbackWhenNoExe(@TempDir Path installDir) throws Exception {
-        Path resolved = resolveExeInDir(installDir);
-        // No exe present — resolved should be null (fallback to java/jar)
-        assertTrue(resolved == null || !Files.isRegularFile(resolved),
-                "Should not find exe when none exists");
-    }
-
-    /**
-     * Mirrors the exe-search logic inside {@link WindowsServiceLauncher#launchMonitorExe}.
-     * Returns the first matching exe path, or {@code null} if none is found.
-     */
-    private static Path resolveExeInDir(Path dir) {
-        String[] exeNames = {"windowMonitor.exe", "windowmonitor.exe"};
-        for (String name : exeNames) {
-            Path candidate = dir.resolve(name);
-            if (Files.isRegularFile(candidate)) {
-                return candidate;
-            }
-        }
-        return null;
+    void testResolveInstallDirReturnsNonNull() {
+        Path dir = WindowsServiceLauncher.resolveInstallDir();
+        assertNotNull(dir, "resolveInstallDir() should return a non-null path");
+        assertTrue(dir.toString().length() > 0, "resolveInstallDir() should return a non-empty path");
     }
 
     /**
