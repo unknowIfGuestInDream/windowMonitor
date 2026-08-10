@@ -30,6 +30,8 @@ package com.tlcsdm.windowmonitor;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -41,8 +43,11 @@ import java.util.logging.SimpleFormatter;
  * <p>This class is used as the main entry point when windowMonitor is run as a
  * Windows service (e.g. via {@code sc.exe} or NSSM). Its responsibilities are:
  * <ol>
- *   <li><b>Start the main monitoring application</b> ({@link WindowMonitorUploader})
- *       in a background thread within the same JVM process.</li>
+ *   <li><b>Start the main monitoring application</b> by launching the installed
+ *       {@code windowMonitor.exe} from the install directory as a child process.
+ *       This ensures that the installed version of the application is always used,
+ *       and that any update applied to the install directory takes effect on the
+ *       next service restart.</li>
  *   <li><b>Perform a daily update check</b> using {@link AutoUpdater}.
  *       When an update is successfully applied the service should be restarted
  *       externally (e.g. by the service manager) so the new version takes effect.
@@ -50,10 +55,15 @@ import java.util.logging.SimpleFormatter;
  *       interruption.</li>
  * </ol>
  *
- * <p><b>Important:</b> The monitoring logic ({@link WindowMonitorUploader}) is
- * executed directly in-process rather than by spawning a child process.  Spawning
- * {@code windowMonitor.exe} from within a service that itself started via
- * {@code windowMonitor.exe} would create an infinite chain of processes.
+ * <p><b>Avoiding the recursive-spawn loop:</b> The Windows service is configured
+ * to invoke {@code windowMonitor.exe} with this class ({@code WindowsServiceLauncher})
+ * as the main entry point.  When this launcher then starts the installed
+ * {@code windowMonitor.exe}, it must NOT forward the original command-line
+ * arguments: those arguments contain the class-override that would cause the child
+ * process to also run {@code WindowsServiceLauncher}, spawning another child, and
+ * so on indefinitely.  The child exe is therefore always started with no extra
+ * arguments, causing it to use the JAR manifest's default main class
+ * ({@link WindowMonitorUploader}).
  *
  * <p>The install directory is derived from the location of the running JAR file.
  * The update configuration is loaded from {@code update.properties} on the
@@ -75,21 +85,25 @@ public class WindowsServiceLauncher {
         // Load update configuration (bundled defaults + optional external override)
         UpdateConfig config = UpdateConfig.load(installDir);
 
-        // 1. Run the monitoring application in-process on a dedicated thread.
-        //    We deliberately do NOT spawn a child process here: launching
-        //    windowMonitor.exe from within a service whose entry point is also
-        //    WindowsServiceLauncher would cause an infinite spawn loop (each child
-        //    would spawn another child, exhausting memory).
-        final String[] monitorArgs = args;
+        // 1. Launch the installed windowMonitor.exe from the install directory.
+        //    The child process is started WITHOUT forwarding the original args.
+        //    Forwarding args would propagate the WindowsServiceLauncher class-override
+        //    into the child, causing the child to spawn another child — an infinite
+        //    recursive loop that exhausts memory.  With no extra args the child exe
+        //    runs the JAR manifest's default main class (WindowMonitorUploader).
+        Process monitorProcess = launchMonitorExe(installDir);
+
+        // Wrap the process in a thread so we can join() on it below.
         Thread monitorThread = new Thread(() -> {
             try {
-                log.info("Starting WindowMonitorUploader in-process...");
-                WindowMonitorUploader.main(monitorArgs);
-            } catch (Exception e) {
-                log.log(Level.SEVERE, "WindowMonitorUploader terminated with an error.", e);
+                int exitCode = monitorProcess.waitFor();
+                log.info("Monitor process exited with code: " + exitCode);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                monitorProcess.destroyForcibly();
             }
         }, "monitor-main");
-        monitorThread.setDaemon(false);
+        monitorThread.setDaemon(true);
         monitorThread.start();
 
         // 2. Perform a daily update check on a dedicated background thread.
@@ -152,10 +166,77 @@ public class WindowsServiceLauncher {
     }
 
     /**
+     * Launches the packaged {@code windowMonitor.exe} from the install directory.
+     *
+     * <p>Candidate executable names are tried in order: {@code windowMonitor.exe},
+     * then {@code windowmonitor.exe} (case-insensitive fallback).  If neither is
+     * found, the method falls back to launching the JAR with the bundled JRE so
+     * that the service continues to function even in non-packaged deployments.
+     *
+     * <p><b>No args are forwarded to the child process.</b>  The original
+     * command-line arguments that launched this {@code WindowsServiceLauncher}
+     * contain a class-override entry that would make the child exe re-run
+     * {@code WindowsServiceLauncher} instead of {@code WindowMonitorUploader},
+     * restarting the spawn loop.  By passing no extra arguments the child exe
+     * uses the JAR manifest's default main class ({@link WindowMonitorUploader}).
+     *
+     * @param installDir the directory that contains the installed application
+     * @return the started {@link Process}
+     * @throws Exception if the process cannot be started
+     */
+    static Process launchMonitorExe(Path installDir) throws Exception {
+        // Preferred executable names (jpackage output on Windows)
+        String[] exeNames = {"windowMonitor.exe", "windowmonitor.exe"};
+        Path exePath = null;
+        for (String name : exeNames) {
+            Path candidate = installDir.resolve(name);
+            if (Files.isRegularFile(candidate)) {
+                exePath = candidate;
+                break;
+            }
+        }
+
+        List<String> command = new ArrayList<>();
+        if (exePath != null) {
+            command.add(exePath.toString());
+        } else {
+            // Fallback: run via the bundled JRE if available, otherwise plain java
+            Path javaExe = installDir.resolve(Path.of("runtime", "bin", "java.exe"));
+            if (!Files.isRegularFile(javaExe)) {
+                javaExe = installDir.resolve(Path.of("jre", "bin", "java.exe"));
+            }
+            command.add(Files.isRegularFile(javaExe) ? javaExe.toString() : "java");
+            // Locate the application JAR in the install directory
+            Path appJar = installDir.resolve("windowMonitor.jar");
+            if (!Files.isRegularFile(appJar)) {
+                // Try app/ sub-directory used by jpackage
+                appJar = installDir.resolve(Path.of("app", "windowMonitor.jar"));
+            }
+            command.add("-jar");
+            command.add(appJar.toString());
+        }
+
+        // NOTE: original args are intentionally NOT forwarded — see Javadoc above.
+
+        log.info("Launching monitor process: " + command);
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.inheritIO();
+        return pb.start();
+    }
+
+    /**
      * Resolves the directory from which the application JAR was loaded.
      *
      * <p>Falls back to the current working directory if the code location cannot
      * be determined (e.g. when running from an IDE or exploded classpath).
+     *
+     * <p>When jpackage packages the application, the JAR is placed inside an
+     * {@code app/} subdirectory while the launcher executable ({@code windowMonitor.exe})
+     * resides in the parent directory. This method automatically walks up to the
+     * parent when the resolved directory is named {@code app} and the parent
+     * directory contains the launcher executable, so that {@link #launchMonitorExe}
+     * can locate {@code windowMonitor.exe} regardless of which executable (including
+     * an NSSM install helper) was used to start the service.
      *
      * @return the install directory {@link Path}
      */
@@ -173,6 +254,20 @@ public class WindowsServiceLauncher {
             Path dir = codeSource.toFile().isFile()
                     ? codeSource.getParent()
                     : codeSource;
+
+            // jpackage places the JAR inside an "app/" subdirectory while the
+            // launcher exe lives in the parent. Walk up so that launchMonitorExe
+            // can find windowMonitor.exe even when the service was registered via
+            // an NSSM helper exe located in the parent directory.
+            if (dir != null && "app".equalsIgnoreCase(dir.getFileName().toString())) {
+                Path parent = dir.getParent();
+                if (parent != null && (Files.isRegularFile(parent.resolve("windowMonitor.exe"))
+                        || Files.isRegularFile(parent.resolve("windowmonitor.exe")))) {
+                    log.info("Detected jpackage app/ subdirectory; using parent as install dir: " + parent);
+                    return parent;
+                }
+            }
+
             return dir != null ? dir : Path.of(".");
         } catch (Exception e) {
             log.log(Level.WARNING, "Could not resolve install directory, using current directory.", e);

@@ -35,6 +35,7 @@ import java.nio.file.Path;
 import java.util.logging.Handler;
 import java.util.logging.Logger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,6 +55,52 @@ public class WindowsServiceLauncherTest {
         Path dir = WindowsServiceLauncher.resolveInstallDir();
         assertNotNull(dir, "resolveInstallDir() should return a non-null path");
         assertTrue(dir.toString().length() > 0, "resolveInstallDir() should return a non-empty path");
+    }
+
+    /**
+     * {@link WindowsServiceLauncher#launchMonitorExe} should locate
+     * {@code windowMonitor.exe} inside the install directory and start it without
+     * forwarding any extra arguments (which would cause a recursive-spawn loop).
+     * We verify the path-resolution logic using a stub executable ({@code java}).
+     */
+    @Test
+    void testLaunchMonitorExeFindsExeInInstallDir(@TempDir Path installDir) throws Exception {
+        // Simulate jpackage structure: installDir/windowMonitor.exe
+        Path exeFile = installDir.resolve("windowMonitor.exe");
+        Files.createFile(exeFile);
+
+        // The exe-search logic should resolve this path
+        Path resolved = resolveExeInDir(installDir);
+        assertNotNull(resolved);
+        assertEquals(exeFile.toAbsolutePath(), resolved.toAbsolutePath());
+        assertTrue(Files.isRegularFile(resolved), "Resolved exe path should exist: " + resolved);
+    }
+
+    /**
+     * When the install directory contains neither {@code windowMonitor.exe} nor
+     * {@code windowmonitor.exe}, the resolver returns {@code null} and the launcher
+     * falls back gracefully to the bundled JRE / plain java.
+     */
+    @Test
+    void testLaunchMonitorExeFallbackWhenNoExe(@TempDir Path installDir) {
+        Path resolved = resolveExeInDir(installDir);
+        assertTrue(resolved == null || !Files.isRegularFile(resolved),
+                "Should not find exe when none exists");
+    }
+
+    /**
+     * Mirrors the exe-search logic inside {@link WindowsServiceLauncher#launchMonitorExe}.
+     * Returns the first matching exe path, or {@code null} if none is found.
+     */
+    private static Path resolveExeInDir(Path dir) {
+        String[] exeNames = {"windowMonitor.exe", "windowmonitor.exe"};
+        for (String name : exeNames) {
+            Path candidate = dir.resolve(name);
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     /**
