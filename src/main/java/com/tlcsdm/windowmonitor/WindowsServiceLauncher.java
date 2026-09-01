@@ -251,19 +251,26 @@ public class WindowsServiceLauncher {
      * @return the held {@link FileLock}, or {@code null} if the lock is already taken
      */
     static FileLock acquireSingleInstanceLock(Path installDir) {
+        FileChannel channel = null;
         try {
             Path lockFile = installDir.resolve("windowMonitor.lock");
-            FileChannel channel = FileChannel.open(lockFile,
+            channel = FileChannel.open(lockFile,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.WRITE);
             FileLock lock = channel.tryLock();
             if (lock == null) {
+                // Another OS-level process holds the lock
                 channel.close();
                 return null;
             }
             return lock;
+        } catch (java.nio.channels.OverlappingFileLockException e) {
+            // Same JVM already holds the lock (e.g. two invocations in the same JVM)
+            try { if (channel != null) channel.close(); } catch (IOException ignored) { }
+            return null;
         } catch (IOException e) {
             log.log(Level.WARNING, "Failed to acquire single-instance lock: " + e.getMessage(), e);
+            try { if (channel != null) channel.close(); } catch (IOException ignored) { }
             return null;
         }
     }
