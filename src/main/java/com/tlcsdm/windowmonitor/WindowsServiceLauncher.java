@@ -28,8 +28,11 @@
 package com.tlcsdm.windowmonitor;
 
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.FileHandler;
@@ -81,6 +84,15 @@ public class WindowsServiceLauncher {
         configureFileLogging(installDir);
 
         log.info("WindowsServiceLauncher starting...");
+
+        // Ensure only one instance runs at a time.  A second invocation (e.g. when
+        // the service manager restarts too quickly) will find the lock already held
+        // and exit immediately rather than spawning a duplicate monitor process.
+        FileLock singleInstanceLock = acquireSingleInstanceLock(installDir);
+        if (singleInstanceLock == null) {
+            log.severe("Another instance of WindowsServiceLauncher is already running. Exiting.");
+            return;
+        }
 
         // Load update configuration (bundled defaults + optional external override)
         UpdateConfig config = UpdateConfig.load(installDir);
@@ -222,6 +234,38 @@ public class WindowsServiceLauncher {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.inheritIO();
         return pb.start();
+    }
+
+    /**
+     * Attempts to acquire an exclusive file lock that acts as a single-instance
+     * guard.  The lock file is {@code windowMonitor.lock} inside the install
+     * directory and is held for the lifetime of the process (the JVM releases
+     * it automatically on exit).
+     *
+     * <p>If the lock cannot be acquired because another process already holds it,
+     * {@code null} is returned and the caller should exit.  If the lock file
+     * cannot be created or opened for any other reason, the error is logged and
+     * {@code null} is returned so the caller exits safely.
+     *
+     * @param installDir the directory used to store the lock file
+     * @return the held {@link FileLock}, or {@code null} if the lock is already taken
+     */
+    static FileLock acquireSingleInstanceLock(Path installDir) {
+        try {
+            Path lockFile = installDir.resolve("windowMonitor.lock");
+            FileChannel channel = FileChannel.open(lockFile,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE);
+            FileLock lock = channel.tryLock();
+            if (lock == null) {
+                channel.close();
+                return null;
+            }
+            return lock;
+        } catch (IOException e) {
+            log.log(Level.WARNING, "Failed to acquire single-instance lock: " + e.getMessage(), e);
+            return null;
+        }
     }
 
     /**
