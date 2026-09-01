@@ -30,6 +30,7 @@ package com.tlcsdm.windowmonitor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.logging.Handler;
@@ -37,6 +38,7 @@ import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -45,6 +47,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @author unknowIfGuestInDream
  */
 public class WindowsServiceLauncherTest {
+
+    /**
+     * The first call to {@link WindowsServiceLauncher#acquireSingleInstanceLock}
+     * should succeed, and the second call (simulating a second instance) should
+     * return {@code null} because the lock is already held.
+     */
+    @Test
+    void testSingleInstanceLockPreventsSecondInstance(@TempDir Path installDir) throws Exception {
+        FileLock firstLock = WindowsServiceLauncher.acquireSingleInstanceLock(installDir);
+        assertNotNull(firstLock, "First instance should acquire the lock");
+        try {
+            FileLock secondLock = WindowsServiceLauncher.acquireSingleInstanceLock(installDir);
+            assertNull(secondLock, "Second instance should not acquire the lock while first holds it");
+        } finally {
+            firstLock.release();
+            firstLock.channel().close();
+        }
+    }
+
+    /**
+     * After the first lock is released, a new instance should be able to acquire it.
+     */
+    @Test
+    void testSingleInstanceLockCanBeReacquiredAfterRelease(@TempDir Path installDir) throws Exception {
+        FileLock firstLock = WindowsServiceLauncher.acquireSingleInstanceLock(installDir);
+        assertNotNull(firstLock, "First instance should acquire the lock");
+        firstLock.release();
+        firstLock.channel().close();
+
+        FileLock secondLock = WindowsServiceLauncher.acquireSingleInstanceLock(installDir);
+        assertNotNull(secondLock, "Should be able to acquire lock after it was released");
+        secondLock.release();
+        secondLock.channel().close();
+    }
 
     /**
      * {@link WindowsServiceLauncher#resolveInstallDir} should return a non-null path
